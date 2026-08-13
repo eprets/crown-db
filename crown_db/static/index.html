@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crown DB — Главная</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f7fa;
+            margin: 0;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            padding: 40px;
+        }
+        h1 {
+            font-size: 2.2rem;
+            color: #1a2a3a;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            color: #6b7a8a;
+            margin-bottom: 40px;
+            font-size: 1.1rem;
+        }
+        .menu-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .menu-card {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 30px 20px;
+            text-align: center;
+            text-decoration: none;
+            color: #1a2a3a;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .menu-card:hover {
+            border-color: #2b7be4;
+            background: #edf3ff;
+            transform: translateY(-3px);
+        }
+        .menu-card .icon {
+            font-size: 3rem;
+            margin-bottom: 12px;
+        }
+        .menu-card h3 {
+            margin: 0 0 8px 0;
+            font-size: 1.3rem;
+        }
+        .menu-card p {
+            margin: 0;
+            color: #5a6a7a;
+            font-size: 0.95rem;
+        }
+        .badge {
+            display: inline-block;
+            background: #2b7be4;
+            color: white;
+            font-size: 0.7rem;
+            padding: 2px 10px;
+            border-radius: 20px;
+            margin-top: 8px;
+        }
+        footer {
+            margin-top: 40px;
+            color: #8a9aa8;
+            font-size: 0.85rem;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 20px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🌳 Crown DB</h1>
+    <div class="subtitle">Система формирования базы данных параметров крон деревьев</div>
+
+    <div class="menu-grid">
+        <a href="/static/annotator.html" class="menu-card">
+            <div class="icon">✏️</div>
+            <h3>Разметка</h3>
+            <p>Аннотирование крон деревьев эллипсами</p>
+            <span class="badge">активно</span>
+        </a>
+
+        <a href="/static/annotations.html" class="menu-card">
+            <div class="icon">📋</div>
+            <h3>Все аннотации</h3>
+            <p>Просмотр, редактирование и удаление</p>
+            <span class="badge">готово</span>
+        </a>
+
+        <a href="#" class="menu-card">
+            <div class="icon">🌲</div>
+            <h3>Деревья</h3>
+            <p>Профили и уровни</p>
+            <span class="badge">скоро</span>
+        </a>
+
+        <a href="#" class="menu-card">
+            <div class="icon">📥</div>
+            <h3>Экспорт</h3>
+            <p>Выгрузка датасетов</p>
+            <span class="badge">скоро</span>
+        </a>
+    </div>
+
+    <footer>
+        Версия 2.0 · 2026 · Магистерская диссертация
+    </footer>
+</div>
+</body>
+</html>

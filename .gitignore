@@ -1,0 +1,29 @@
+# Виртуальное окружение
+.venv/
+venv/
+env/
+
+# Кеш Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Данные (изображения, БД, логи, маски, ROI)
+data/
+*.sqlite3
+*.log
+
+# Файлы IDE
+.vscode/
+.idea/
+*.swp
+
+# Сборки
+dist/
+build/
+*.egg-info/
+
+# Временные файлы
+*.tmp
+*.bak

@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+alembic
+opencv-python
+pillow
+numpy
+scikit-image
+torch
+torchvision
+pydantic-settings
+python-dotenv

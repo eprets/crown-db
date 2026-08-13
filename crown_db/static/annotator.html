@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Аннотатор крон деревьев</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+        .toolbar {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+        .toolbar label {
+            font-weight: bold;
+        }
+        .toolbar input, .toolbar select {
+            padding: 5px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .toolbar button {
+            padding: 6px 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .toolbar button:hover {
+            background: #0056b3;
+        }
+        .canvas-wrapper {
+            position: relative;
+            border: 1px solid #ccc;
+            background: #e9ecef;
+            display: inline-block;
+        }
+        canvas {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            cursor: crosshair;
+        }
+        .info {
+            margin-top: 15px;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .controls {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .controls input {
+            padding: 5px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 180px;
+        }
+        .controls button {
+            padding: 6px 16px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .controls button:hover {
+            background: #218838;
+        }
+        .controls button.reset {
+            background: #dc3545;
+        }
+        .controls button.reset:hover {
+            background: #c82333;
+        }
+        #status {
+            margin-top: 10px;
+            color: #28a745;
+            font-weight: bold;
+        }
+        .image-selector {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .image-selector select {
+            width: 300px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🌳 Аннотатор крон деревьев</h1>
+    <p>Кликните на изображении, чтобы установить центр эллипса. Затем потяните мышью, чтобы задать размеры.</p>
+
+    <div class="toolbar">
+        <div class="image-selector">
+            <label for="imageSelect">Выберите изображение:</label>
+            <select id="imageSelect"></select>
+            <button id="loadBtn">Загрузить</button>
+        </div>
+    </div>
+
+    <div class="canvas-wrapper">
+        <canvas id="canvas" width="800" height="600"></canvas>
+    </div>
+
+    <div class="info" id="info">
+        Состояние: ожидание загрузки изображения.
+    </div>
+
+    <div class="controls">
+        <label>Tree ID: <input type="text" id="treeId" placeholder="tree_001"></label>
+        <label>Tree Type: <input type="text" id="treeType" placeholder="pine"></label>
+        <button id="saveBtn">💾 Сохранить аннотацию</button>
+        <button id="resetBtn" class="reset">↺ Сбросить эллипс</button>
+    </div>
+
+    <div id="status"></div>
+</div>
+
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const imageSelect = document.getElementById('imageSelect');
+    const loadBtn = document.getElementById('loadBtn');
+    const info = document.getElementById('info');
+    const treeIdInput = document.getElementById('treeId');
+    const treeTypeInput = document.getElementById('treeType');
+    const saveBtn = document.getElementById('saveBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const statusDiv = document.getElementById('status');
+
+    let currentImageId = null;
+    let currentOriginalName = null;
+    let img = new Image();
+    let loaded = false;
+
+    // состояние эллипса
+    let ellipse = {
+        x0: null, // центр x
+        y0: null, // центр y
+        a: null,  // полуось по x
+        b: null,  // полуось по y
+        theta: 0  // угол в радианах (пока 0)
+    };
+    let isDrawing = false;
+    let startX, startY;
+
+    // ========== ФУНКЦИЯ ИЗВЛЕЧЕНИЯ ТИПА ДЕРЕВА ИЗ ИМЕНИ ==========
+    function extractTreeType(originalName) {
+        // Убираем расширение
+        let name = originalName.replace(/\.[^.]+$/, '');
+        // Ищем слово (буквы) до цифр или до "м"
+        const match = name.match(/^([а-яА-ЯёЁa-zA-Z]+)/);
+        if (match) {
+            return match[1].toLowerCase();
+        }
+        return '';
+    }
+
+    // ========== ЗАГРУЗКА СПИСКА ИЗОБРАЖЕНИЙ ==========
+    async function loadImageList() {
+        const resp = await fetch('/api/images');
+        const data = await resp.json();
+        imageSelect.innerHTML = '';
+        if (data.length === 0) {
+            imageSelect.innerHTML = '<option value="">Нет изображений для аннотации</option>';
+            return;
+        }
+        for (let img of data) {
+            const option = document.createElement('option');
+            option.value = img.image_id;
+            option.dataset.originalName = img.original_name || img.path.split('/').pop();
+            option.textContent = `${img.original_name || img.image_id} (высота: ${img.flight_altitude || '?'} м)`;
+            imageSelect.appendChild(option);
+        }
+    }
+
+    // ========== ЗАГРУЗКА ИЗОБРАЖЕНИЯ НА CANVAS ==========
+    async function loadImage(imageId) {
+        if (!imageId) {
+            info.textContent = 'Выберите изображение.';
+            return;
+        }
+        currentImageId = imageId;
+
+        // Находим выбранный option, чтобы достать original_name
+        const selectedOption = imageSelect.querySelector(`option[value="${imageId}"]`);
+        if (selectedOption) {
+            currentOriginalName = selectedOption.dataset.originalName;
+            // Автоматически подставляем тип дерева
+            const treeType = extractTreeType(currentOriginalName);
+            treeTypeInput.value = treeType;
+            // Можно также предложить автоматический tree_id, но оставим ручной ввод
+        }
+
+        const url = `/api/image/${imageId}`;
+        img.src = url;
+        img.onload = function() {
+            const maxW = 800, maxH = 600;
+            let w = img.width, h = img.height;
+            if (w > maxW) { h = h * maxW / w; w = maxW; }
+            if (h > maxH) { w = w * maxH / h; h = maxH; }
+            canvas.width = w;
+            canvas.height = h;
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            loaded = true;
+            info.textContent = `Изображение загружено: ${currentOriginalName || imageId}`;
+            resetEllipse();
+        };
+        img.onerror = function() {
+            info.textContent = 'Ошибка загрузки изображения!';
+            loaded = false;
+        };
+    }
+
+    // ========== ОТРИСОВКА ЭЛЛИПСА ==========
+    function drawEllipse() {
+        if (!loaded) return;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        if (ellipse.x0 !== null && ellipse.a !== null && ellipse.b !== null) {
+            ctx.beginPath();
+            ctx.ellipse(ellipse.x0, ellipse.y0, ellipse.a, ellipse.b, ellipse.theta, 0, 2 * Math.PI);
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(ellipse.x0, ellipse.y0, 4, 0, 2 * Math.PI);
+            ctx.fillStyle = 'red';
+            ctx.fill();
+        }
+    }
+
+    function resetEllipse() {
+        ellipse = { x0: null, y0: null, a: null, b: null, theta: 0 };
+        isDrawing = false;
+        drawEllipse();
+        info.textContent = 'Эллипс сброшен. Нажмите на изображении, чтобы поставить центр.';
+    }
+
+    // ========== ОБРАБОТЧИКИ МЫШИ ==========
+    canvas.addEventListener('mousedown', function(e) {
+        if (!loaded) return;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+
+        if (ellipse.x0 !== null && ellipse.y0 !== null) {
+            isDrawing = true;
+            startX = x;
+            startY = y;
+        } else {
+            ellipse.x0 = x;
+            ellipse.y0 = y;
+            ellipse.a = 0;
+            ellipse.b = 0;
+            drawEllipse();
+            info.textContent = `Центр установлен (${Math.round(x)}, ${Math.round(y)}). Растяните эллипс.`;
+        }
+    });
+
+    canvas.addEventListener('mousemove', function(e) {
+        if (!isDrawing || ellipse.x0 === null) return;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+
+        const dx = x - ellipse.x0;
+        const dy = y - ellipse.y0;
+        ellipse.a = Math.abs(dx);
+        ellipse.b = Math.abs(dy);
+        drawEllipse();
+        info.textContent = `Эллипс: a=${Math.round(ellipse.a)}, b=${Math.round(ellipse.b)}`;
+    });
+
+    canvas.addEventListener('mouseup', function(e) {
+        if (isDrawing) {
+            isDrawing = false;
+            info.textContent = `Эллипс зафиксирован. Можете сохранить.`;
+        }
+    });
+
+    canvas.addEventListener('mouseleave', function(e) {
+        if (isDrawing) {
+            isDrawing = false;
+            drawEllipse();
+        }
+    });
+
+    // ========== КНОПКИ ==========
+    loadBtn.addEventListener('click', function() {
+        const id = imageSelect.value;
+        if (id) loadImage(id);
+    });
+
+    resetBtn.addEventListener('click', resetEllipse);
+
+    saveBtn.addEventListener('click', async function() {
+        if (!currentImageId) {
+            statusDiv.textContent = '❌ Сначала загрузите изображение.';
+            return;
+        }
+        if (ellipse.x0 === null || ellipse.a === null || ellipse.b === null) {
+            statusDiv.textContent = '❌ Эллипс не задан. Поставьте центр и растяните.';
+            return;
+        }
+        const treeId = treeIdInput.value.trim();
+        const treeType = treeTypeInput.value.trim();
+        if (!treeId) {
+            statusDiv.textContent = '❌ Введите Tree ID.';
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('image_id', currentImageId);
+        formData.append('tree_id', treeId);
+        formData.append('tree_type', treeType || 'unknown');
+        formData.append('x0', ellipse.x0);
+        formData.append('y0', ellipse.y0);
+        formData.append('a', ellipse.a);
+        formData.append('b', ellipse.b);
+        formData.append('theta', ellipse.theta);
+
+        try {
+            const resp = await fetch('/api/annotate', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await resp.json();
+            if (data.status === 'ok') {
+                statusDiv.textContent = `✅ Аннотация для дерева "${data.tree_id}" на изображении "${data.image_original_name}" сохранена! (ID: ${data.annotation_id})`;
+                resetEllipse();
+                loadImageList();
+                // Автоматически выбираем следующее изображение
+                if (imageSelect.options.length > 0) {
+                    imageSelect.selectedIndex = 0;
+                    loadImage(imageSelect.value);
+                }
+            } else {
+                statusDiv.textContent = `❌ Ошибка: ${data.detail || 'неизвестная'}`;
+            }
+        } catch (err) {
+            statusDiv.textContent = `❌ Ошибка связи: ${err.message}`;
+        }
+    });
+
+    // ========== ЗАПУСК ==========
+    loadImageList();
+
+    setTimeout(() => {
+        if (imageSelect.options.length > 0 && imageSelect.options[0].value) {
+            loadImage(imageSelect.options[0].value);
+        }
+    }, 500);
+</script>
+</body>
+</html>

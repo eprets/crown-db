@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Редактирование аннотации</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f7fa; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { margin-top: 0; }
+        .back-link { display: inline-block; margin-bottom: 20px; color: #007bff; text-decoration: none; }
+        .back-link:hover { text-decoration: underline; }
+        .canvas-wrapper { border: 1px solid #ccc; background: #e9ecef; display: inline-block; }
+        canvas { display: block; max-width: 100%; height: auto; cursor: crosshair; }
+        .info { margin: 15px 0; padding: 10px; background: #e9ecef; border-radius: 4px; font-size: 14px; }
+        .controls { margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .controls input { padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px; width: 180px; }
+        .controls button { padding: 6px 16px; border: none; border-radius: 4px; cursor: pointer; }
+        .btn-save { background: #28a745; color: white; }
+        .btn-save:hover { background: #218838; }
+        .btn-reset { background: #dc3545; color: white; }
+        .btn-reset:hover { background: #c82333; }
+        #status { margin-top: 10px; font-weight: bold; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <a href="/static/annotations.html" class="back-link">← Назад к списку</a>
+    <h1>✏️ Редактирование аннотации</h1>
+    <div id="info" class="info">Загрузка...</div>
+
+    <div class="canvas-wrapper">
+        <canvas id="canvas" width="800" height="600"></canvas>
+    </div>
+
+    <div class="controls">
+        <label>Tree ID: <input type="text" id="treeId" placeholder="tree_001"></label>
+        <label>Tree Type: <input type="text" id="treeType" placeholder="pine"></label>
+        <button id="saveBtn" class="btn-save">💾 Обновить</button>
+        <button id="resetBtn" class="btn-reset">↺ Сбросить эллипс</button>
+    </div>
+    <div id="status"></div>
+</div>
+
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const info = document.getElementById('info');
+    const treeIdInput = document.getElementById('treeId');
+    const treeTypeInput = document.getElementById('treeType');
+    const saveBtn = document.getElementById('saveBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const statusDiv = document.getElementById('status');
+
+    let annotationId = null;
+    let img = new Image();
+    let loaded = false;
+    let originalData = null;
+
+    // состояние эллипса
+    let ellipse = { x0: null, y0: null, a: null, b: null, theta: 0 };
+    let isDrawing = false;
+
+    // Получаем annotation_id из URL
+    const urlParams = new URLSearchParams(window.location.search);
+    annotationId = urlParams.get('annotation_id');
+    if (!annotationId) {
+        info.textContent = '❌ Не указан annotation_id';
+        throw new Error('No annotation_id');
+    }
+
+    // ========== ЗАГРУЗКА ДАННЫХ АННОТАЦИИ ==========
+    async function loadAnnotation() {
+        try {
+            const resp = await fetch(`/api/annotations/${annotationId}`);
+            const data = await resp.json();
+            originalData = data;
+            treeIdInput.value = data.tree_id;
+            treeTypeInput.value = data.tree_type || '';
+
+            // Загружаем изображение
+            img.src = data.image_path;
+            img.onload = function() {
+                const maxW = 800, maxH = 600;
+                let w = img.width, h = img.height;
+                if (w > maxW) { h = h * maxW / w; w = maxW; }
+                if (h > maxH) { w = w * maxH / h; h = maxH; }
+                canvas.width = w;
+                canvas.height = h;
+                loaded = true;
+
+                // Устанавливаем эллипс из данных
+                ellipse.x0 = data.x0;
+                ellipse.y0 = data.y0;
+                ellipse.a = data.a;
+                ellipse.b = data.b;
+                ellipse.theta = data.theta || 0;
+                drawEllipse();
+                info.textContent = `Аннотация ${data.annotation_id} на изображении ${data.image_path.split('/').pop()}`;
+            };
+            img.onerror = function() {
+                info.textContent = '❌ Ошибка загрузки изображения';
+                loaded = false;
+            };
+        } catch (e) {
+            info.textContent = '❌ Ошибка загрузки аннотации: ' + e.message;
+        }
+    }
+
+    // ========== ОТРИСОВКА ==========
+    function drawEllipse() {
+        if (!loaded) return;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        if (ellipse.x0 !== null && ellipse.a !== null && ellipse.b !== null) {
+            ctx.beginPath();
+            ctx.ellipse(ellipse.x0, ellipse.y0, ellipse.a, ellipse.b, ellipse.theta, 0, 2 * Math.PI);
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(ellipse.x0, ellipse.y0, 4, 0, 2 * Math.PI);
+            ctx.fillStyle = 'red';
+            ctx.fill();
+        }
+    }
+
+    // ========== МЫШЬ ==========
+    canvas.addEventListener('mousedown', function(e) {
+        if (!loaded) return;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+
+        if (ellipse.x0 !== null && ellipse.y0 !== null) {
+            isDrawing = true;
+        } else {
+            ellipse.x0 = x;
+            ellipse.y0 = y;
+            ellipse.a = 0;
+            ellipse.b = 0;
+            drawEllipse();
+        }
+    });
+
+    canvas.addEventListener('mousemove', function(e) {
+        if (!isDrawing || ellipse.x0 === null) return;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+
+        const dx = x - ellipse.x0;
+        const dy = y - ellipse.y0;
+        ellipse.a = Math.abs(dx);
+        ellipse.b = Math.abs(dy);
+        drawEllipse();
+    });
+
+    canvas.addEventListener('mouseup', function(e) {
+        if (isDrawing) { isDrawing = false; }
+    });
+
+    canvas.addEventListener('mouseleave', function(e) {
+        if (isDrawing) { isDrawing = false; drawEllipse(); }
+    });
+
+    // ========== КНОПКИ ==========
+    resetBtn.addEventListener('click', function() {
+        ellipse = { x0: null, y0: null, a: null, b: null, theta: 0 };
+        drawEllipse();
+        statusDiv.textContent = 'Эллипс сброшен';
+    });
+
+    saveBtn.addEventListener('click', async function() {
+        if (!loaded) { statusDiv.textContent = '❌ Изображение не загружено'; return; }
+        if (ellipse.x0 === null || ellipse.a === null || ellipse.b === null) {
+            statusDiv.textContent = '❌ Эллипс не задан. Поставьте центр и растяните.';
+            return;
+        }
+        const treeId = treeIdInput.value.trim();
+        if (!treeId) { statusDiv.textContent = '❌ Введите Tree ID'; return; }
+
+        const formData = new FormData();
+        formData.append('tree_id', treeId);
+        formData.append('tree_type', treeTypeInput.value.trim() || 'unknown');
+        formData.append('x0', ellipse.x0);
+        formData.append('y0', ellipse.y0);
+        formData.append('a', ellipse.a);
+        formData.append('b', ellipse.b);
+        formData.append('theta', ellipse.theta);
+
+        try {
+            const resp = await fetch(`/api/annotations/${annotationId}`, {
+                method: 'PUT',
+                body: formData
+            });
+            const data = await resp.json();
+            if (data.status === 'ok') {
+                statusDiv.textContent = '✅ Аннотация обновлена!';
+                setTimeout(() => { window.location.href = '/static/annotations.html'; }, 1000);
+            } else {
+                statusDiv.textContent = '❌ Ошибка: ' + (data.detail || 'неизвестная');
+            }
+        } catch (e) {
+            statusDiv.textContent = '❌ Ошибка связи: ' + e.message;
+        }
+    });
+
+    // ========== ЗАПУСК ==========
+    loadAnnotation();
+</script>
+</body>
+</html>
