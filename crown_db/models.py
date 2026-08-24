@@ -70,6 +70,7 @@ class Observation(Base):
     tree_id = Column(String, ForeignKey("trees.tree_id"), nullable=False)
 
     roi_raw_path = Column(String, nullable=False)
+    roi_norm_path = Column(String, nullable=True)
     obs_height = Column(Float, nullable=True)
     features_json = Column(Text, nullable=True)
 
@@ -91,7 +92,7 @@ class Level(Base):
 
     data_type = Column(String, nullable=False, default="REAL")   # REAL / SYNTH
     mapping_error = Column(Float, nullable=True)
-
+    
     roi_norm_path = Column(String, nullable=True)
     roi_mask_norm_path = Column(String, nullable=True)
     ellipse_norm_json = Column(Text, nullable=True)
