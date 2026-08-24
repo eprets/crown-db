@@ -10,8 +10,9 @@
         h1 { margin-top: 0; }
         .back-link { display: inline-block; margin-bottom: 20px; color: #007bff; text-decoration: none; }
         .back-link:hover { text-decoration: underline; }
-        .canvas-wrapper { border: 1px solid #ccc; background: #e9ecef; display: inline-block; }
-        canvas { display: block; max-width: 100%; height: auto; cursor: crosshair; }
+        .canvas-wrapper { position: relative; border: 1px solid #ccc; background: #e9ecef; display: inline-block; }
+        canvas { display: block; max-width: 100%; height: auto; cursor: crosshair; position: absolute; top: 0; left: 0; }
+        #backgroundImg { display: block; max-width: 100%; height: auto; }
         .info { margin: 15px 0; padding: 10px; background: #e9ecef; border-radius: 4px; font-size: 14px; }
         .controls { margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
         .controls input { padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px; width: 180px; }
@@ -30,6 +31,7 @@
     <div id="info" class="info">Загрузка...</div>
 
     <div class="canvas-wrapper">
+        <img id="backgroundImg" src="" alt="Изображение кроны">
         <canvas id="canvas" width="800" height="600"></canvas>
     </div>
 
@@ -45,6 +47,7 @@
 <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
+    const bgImg = document.getElementById('backgroundImg');
     const info = document.getElementById('info');
     const treeIdInput = document.getElementById('treeId');
     const treeTypeInput = document.getElementById('treeType');
@@ -53,15 +56,11 @@
     const statusDiv = document.getElementById('status');
 
     let annotationId = null;
-    let img = new Image();
     let loaded = false;
-    let originalData = null;
-
-    // состояние эллипса
+    let currentImageId = null;
     let ellipse = { x0: null, y0: null, a: null, b: null, theta: 0 };
     let isDrawing = false;
 
-    // Получаем annotation_id из URL
     const urlParams = new URLSearchParams(window.location.search);
     annotationId = urlParams.get('annotation_id');
     if (!annotationId) {
@@ -69,62 +68,73 @@
         throw new Error('No annotation_id');
     }
 
-    // ========== ЗАГРУЗКА ДАННЫХ АННОТАЦИИ ==========
     async function loadAnnotation() {
         try {
             const resp = await fetch(`/api/annotations/${annotationId}`);
+            if (!resp.ok) throw new Error('Ошибка загрузки аннотации');
             const data = await resp.json();
-            originalData = data;
+            currentImageId = data.image_id;
             treeIdInput.value = data.tree_id;
             treeTypeInput.value = data.tree_type || '';
 
-            // Загружаем изображение
-            img.src = data.image_path;
-            img.onload = function() {
+            ellipse.x0 = data.x0;
+            ellipse.y0 = data.y0;
+            ellipse.a = data.a;
+            ellipse.b = data.b;
+            ellipse.theta = data.theta || 0;
+
+            const imageUrl = `/api/image/${currentImageId}`;
+            bgImg.src = imageUrl;
+            bgImg.onload = function() {
+                canvas.width = bgImg.naturalWidth;
+                canvas.height = bgImg.naturalHeight;
                 const maxW = 800, maxH = 600;
-                let w = img.width, h = img.height;
+                let w = canvas.width, h = canvas.height;
                 if (w > maxW) { h = h * maxW / w; w = maxW; }
                 if (h > maxH) { w = w * maxH / h; h = maxH; }
-                canvas.width = w;
-                canvas.height = h;
+                canvas.style.width = w + 'px';
+                canvas.style.height = h + 'px';
+                bgImg.style.width = w + 'px';
+                bgImg.style.height = h + 'px';
                 loaded = true;
-
-                // Устанавливаем эллипс из данных
-                ellipse.x0 = data.x0;
-                ellipse.y0 = data.y0;
-                ellipse.a = data.a;
-                ellipse.b = data.b;
-                ellipse.theta = data.theta || 0;
+                info.textContent = `Аннотация ${data.annotation_id} на изображении "${data.image_path.split('/').pop()}"`;
                 drawEllipse();
-                info.textContent = `Аннотация ${data.annotation_id} на изображении ${data.image_path.split('/').pop()}`;
             };
-            img.onerror = function() {
-                info.textContent = '❌ Ошибка загрузки изображения';
+            bgImg.onerror = function() {
+                info.textContent = '❌ Ошибка загрузки изображения. Проверьте, что файл существует.';
                 loaded = false;
             };
         } catch (e) {
-            info.textContent = '❌ Ошибка загрузки аннотации: ' + e.message;
+            info.textContent = '❌ Ошибка: ' + e.message;
         }
     }
 
-    // ========== ОТРИСОВКА ==========
+    // ======== ЯРКИЙ ЭЛЛИПС ========
     function drawEllipse() {
         if (!loaded) return;
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         if (ellipse.x0 !== null && ellipse.a !== null && ellipse.b !== null) {
             ctx.beginPath();
             ctx.ellipse(ellipse.x0, ellipse.y0, ellipse.a, ellipse.b, ellipse.theta, 0, 2 * Math.PI);
-            ctx.strokeStyle = 'red';
+            // Полупрозрачная заливка (для контраста)
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.15)';
+            ctx.fill();
+            // Яркая красная обводка, жирная
+            ctx.strokeStyle = '#FF0000';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            // Центральная точка - яркая и большая
+            ctx.beginPath();
+            ctx.arc(ellipse.x0, ellipse.y0, 6, 0, 2 * Math.PI);
+            ctx.fillStyle = '#FF0000';
+            ctx.fill();
+            ctx.strokeStyle = '#FFFFFF';
             ctx.lineWidth = 2;
             ctx.stroke();
-            ctx.beginPath();
-            ctx.arc(ellipse.x0, ellipse.y0, 4, 0, 2 * Math.PI);
-            ctx.fillStyle = 'red';
-            ctx.fill();
         }
     }
 
-    // ========== МЫШЬ ==========
+    // ======== ОБРАБОТЧИКИ МЫШИ ========
     canvas.addEventListener('mousedown', function(e) {
         if (!loaded) return;
         const rect = canvas.getBoundingClientRect();
@@ -167,7 +177,6 @@
         if (isDrawing) { isDrawing = false; drawEllipse(); }
     });
 
-    // ========== КНОПКИ ==========
     resetBtn.addEventListener('click', function() {
         ellipse = { x0: null, y0: null, a: null, b: null, theta: 0 };
         drawEllipse();
@@ -209,7 +218,6 @@
         }
     });
 
-    // ========== ЗАПУСК ==========
     loadAnnotation();
 </script>
 </body>
