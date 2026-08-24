@@ -10,3 +10,4 @@ torch
 torchvision
 pydantic-settings
 python-dotenv
+tqdm
