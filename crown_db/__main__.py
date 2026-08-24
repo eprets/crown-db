@@ -4,6 +4,7 @@ from pathlib import Path
 from .database import engine, Base
 from .services.import_service import import_images
 from .services.query_service import list_images
+from .services.observation_service import build_observations  # <-- новый импорт
 
 def init_db():
     print("🗄️ Создание таблиц...")
@@ -28,9 +29,14 @@ def list_cmd():
     for img in images:
         print(f"   {img.image_id} | {img.path} | высота: {img.flight_altitude} | {img.timestamp}")
 
+def build_obs_cmd():
+    print("📦 Сборка наблюдений (ROI)...")
+    count = build_observations(padding_px=20)
+    print(f"✅ Создано {count} наблюдений.")
+
 def start_server():
     print("🚀 Запуск сервера...")
-    print("🌐 Откройте в браузере: http://localhost:8000/static/annotator.html")
+    print("🌐 Откройте в браузере: http://localhost:8000/static/index.html")
     import uvicorn
     uvicorn.run("crown_db.api:app", host="0.0.0.0", port=8000, reload=True)
 
@@ -38,10 +44,11 @@ def main():
     if len(sys.argv) < 2:
         print("🐍 Crown DB v2.0")
         print("Доступные команды:")
-        print("  init-db        - создать таблицы")
-        print("  import         - импортировать изображения")
-        print("  list-images    - показать список изображений")
-        print("  start          - запустить сервер")
+        print("  init-db           - создать таблицы")
+        print("  import            - импортировать изображения")
+        print("  list-images       - показать список изображений")
+        print("  build-observations - создать ROI для всех аннотаций")
+        print("  start             - запустить сервер")
         return
 
     command = sys.argv[1]
@@ -51,6 +58,8 @@ def main():
         import_cmd()
     elif command == "list-images":
         list_cmd()
+    elif command == "build-observations":
+        build_obs_cmd()
     elif command == "start":
         start_server()
     else:
